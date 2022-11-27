@@ -1,91 +1,36 @@
 import cv2
 import numpy as np
 from rest_framework import status, viewsets
-from rest_framework.decorators import api_view, renderer_classes, action
-from rest_framework.renderers import JSONRenderer
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from hand_gesture.recognition import get_recognition
+from hand_gesture.recognition import get_recognition_image, get_recognition_video
 from .models import Translation, HandGesture
-from .serializers import HandGestureSerializer, TranslationSerializer
+from .serializers import HandGestureSerializer, TranslationSerializer, VideoSerializer
 
 
-class HandGestureImageAPIView(APIView):
+class ImageAPIView(APIView):
     def post(self, request):
         image = request.data["image"]
         data = image.read()
         image = np.asarray(bytearray(data), dtype="uint8")
         image = cv2.imdecode(image, cv2.IMREAD_COLOR)
-        text = Translation.objects.get(key=get_recognition(image), language=request.data["language"]).value
+        text = Translation.objects.get(key=get_recognition_image(image), language=request.data["language"]).value
         return Response({"data": text})
 
 
-# class HandGestureAPIView(APIView):
-#     @staticmethod
-#     def get_object(pk):
-#         if not pk:
-#             return Response({"error": "Id can't be null"})
-#         try:
-#             return HandGesture.objects.get(pk=pk)
-#         except:
-#             return Response({"error": "Hand gesture with id=" + str(pk) + " not found"},
-#                             status=status.HTTP_404_NOT_FOUND)
-#
-#     def get(self, request):
-#         return Response({"data": HandGestureSerializer(HandGesture.objects.all(), many=True).data})
-#
-#     def post(self, request):
-#         translations = request.data["translations"]
-#         key = translations["en"].replace(" ", "").lower()
-#
-#         translations = [{"key": key, "value": translations["kz"], "language": "kz"},
-#                         {"key": key, "value": translations["en"], "language": "en"},
-#                         {"key": key, "value": translations["ru"], "language": "ru"}]
-#         translation_serializer = TranslationSerializer(data=translations, many=True)
-#         translation_serializer.is_valid(raise_exception=True)
-#         translation_serializer.save()
-#
-#         hand_serializer = HandGestureSerializer(data={"translation_key": key})
-#         hand_serializer.is_valid(raise_exception=True)
-#         hand_serializer.save()
-#
-#         return Response({"data": {"gesture": hand_serializer.data,
-#                                   "translations": translation_serializer.data}},
-#                         status=status.HTTP_201_CREATED)
-#
-#     def put(self, request, *args, **kwargs):
-#         serializer = HandGestureSerializer(data=request.data,
-#                                            instance=self.get_object(kwargs.get("pk", None)))
-#         serializer.is_valid(raise_exception=True)
-#         serializer.save()
-#
-#         return Response(serializer.data)
-#
-#     def delete(self, request, *args, **kwargs):
-#         return Response(self.get_object(kwargs.get("pk", None)).delete())
-
-
-class TranslationAPIView(APIView):
-    def get(self, request):
-        return Response({"data": TranslationSerializer(Translation.objects.all(), many=True).data})
-
-    def put(self, request, *args, **kwargs):
-        pk = kwargs.get("pk", None)
-        if not pk:
-            return Response({"error": "Id can't be null"})
-
-        try:
-            instance = HandGesture.objects.get(pk=pk)
-        except:
-            return Response({"error": "Translation with id=" + str(pk) + " not found"},
-                            status=status.HTTP_404_NOT_FOUND)
-
-        serializer = TranslationSerializer(data=request.data, instance=instance)
+class VideoAPIView(APIView):
+    def post(self, request):
+        video = request.data["video"]
+        serializer = VideoSerializer(data={"video": video})
         serializer.is_valid(raise_exception=True)
         serializer.save()
-
-        return Response({"data": serializer.data})
+        text = get_recognition_video(serializer.data.get("video"))
+        data = []
+        for key in text:
+            data.append(Translation.objects.get(key=key, language=request.data["language"]).value)
+        return Response({"data": data})
 
 
 class HandGestureViewSet(viewsets.ModelViewSet):
@@ -133,9 +78,12 @@ class HandGestureViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-# @api_view(('GET',))
-# @renderer_classes((JSONRenderer,))
-# def get_is_trained(request):
-#     print(request.data["is_trained"])
-#     return Response({"data": HandGestureSerializer(
-#         HandGesture.objects.filter(is_trained=request.data["is_trained"]), many=True).data})
+class TranslationViewSet(viewsets.ModelViewSet):
+    queryset = Translation.objects.all()
+    serializer_class = TranslationSerializer
+
+    @action(methods=['get'], detail=False)
+    def get_by_key(self, request):
+        translations = Translation.objects.filter(key=request.GET.get("key", None))
+        serializer = self.get_serializer(translations, many=True)
+        return Response(serializer.data)

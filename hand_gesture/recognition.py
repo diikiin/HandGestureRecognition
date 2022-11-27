@@ -4,6 +4,7 @@ import numpy as np
 from keras.layers import LSTM, Dense
 from keras.models import Sequential
 
+from HandGestureRecognition.settings import BASE_DIR
 from .models import HandGesture
 
 mp_holistic = mp.solutions.holistic  # Holistic model
@@ -38,18 +39,18 @@ def extract_keypoints(results):
 
 def get_model(actions):
     model = Sequential()
-    model.add(LSTM(64, return_sequences=True, activation='relu', input_shape=(30,1662)))
+    model.add(LSTM(64, return_sequences=True, activation='relu', input_shape=(30, 1662)))
     model.add(LSTM(128, return_sequences=True, activation='relu'))
     model.add(LSTM(64, return_sequences=False, activation='relu'))
     model.add(Dense(64, activation='relu'))
     model.add(Dense(32, activation='relu'))
     model.add(Dense(actions.shape[0], activation='softmax'))
     model.compile(optimizer='Adam', loss='categorical_crossentropy', metrics=['categorical_accuracy'])
-    model.load_weights('C:/Users/ADMIN/Desktop/Full stack/HandGestureRecognition/hand_gesture/action.h5')
+    model.load_weights('./hand_gesture/action.h5')
     return model
 
 
-def get_recognition(frame):
+def get_recognition_image(frame):
     sequence = []
     sentence = []
     predictions = []
@@ -89,3 +90,45 @@ def get_recognition(frame):
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
         return sentence[-1]
+
+
+def get_recognition_video(video):
+    sequence = []
+    sentence = []
+    predictions = []
+    threshold = 0.5
+    actions = np.array(HandGesture.objects.filter(is_trained=True).values_list("translation_key", flat=True))
+    model = get_model(actions)
+    cap = cv2.VideoCapture(BASE_DIR.__str__() + video)
+
+    with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
+        while cap.isOpened():
+            # Read feed
+            ret, frame = cap.read()
+
+            if ret:
+                # Make detections
+                image, results = mediapipe_detection(frame, holistic)
+
+                # 2. Prediction logic
+                keypoints = extract_keypoints(results)
+                sequence.append(keypoints)
+                sequence = sequence[-30:]
+
+                if len(sequence) == 30:
+                    res = model.predict(np.expand_dims(sequence, axis=0))[0]
+                    predictions.append(np.argmax(res))
+
+                    # 3. Viz logic
+                    if np.unique(predictions[-10:])[0] == np.argmax(res):
+                        if res[np.argmax(res)] > threshold:
+
+                            if len(sentence) > 0:
+                                if actions[np.argmax(res)] != sentence[-1]:
+                                    sentence.append(actions[np.argmax(res)])
+                            else:
+                                sentence.append(actions[np.argmax(res)])
+            else:
+                break
+    cap.release()
+    return sentence

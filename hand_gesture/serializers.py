@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Image, Video, HandGesture, Translation
+from .models import Video, HandGesture, Translation
 
 
 class HandGestureSerializer(serializers.Serializer):
@@ -32,18 +32,12 @@ class TranslationSerializer(serializers.Serializer):
     def create(self, validated_data):
         return Translation.objects.create(**validated_data)
 
-# class HandGestureSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = HandGesture
-#         fields = ("translation_key", "is_trained", "time_create", "time_update")
 
-class ImageSerializer(serializers.HyperlinkedModelSerializer):
-    class Meta:
-        model = Image
-        fields = ['image']
+class VideoSerializer(serializers.Serializer):
+    video = serializers.FileField(allow_null=True, allow_empty_file=True)
 
+    def update(self, instance, validated_data):
+        pass
 
-class VideoSerializer(serializers.HyperlinkedModelSerializer):
-    class Meta:
-        model = Video
-        fields = ['video']
+    def create(self, validated_data):
+        return Video.objects.create(**validated_data)
