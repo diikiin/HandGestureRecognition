@@ -2,13 +2,13 @@ from django.db import models
 
 
 class HandGesture(models.Model):
-    translationKey = models.ForeignKey('Translation', on_delete=models.CASCADE)
+    translation_key = models.CharField(max_length=255, db_index=True, null=False, blank=False)
     is_trained = models.BooleanField(default=False)
     time_create = models.DateTimeField(auto_now_add=True, null=True)
     time_update = models.DateTimeField(auto_now=True, null=True)
 
     def __str__(self):
-        return self.translationKey
+        return self.translation_key
 
 
 class Translation(models.Model):

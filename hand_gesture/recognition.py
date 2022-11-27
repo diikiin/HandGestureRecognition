@@ -1,37 +1,39 @@
 import cv2
 import mediapipe as mp
 import numpy as np
-from django.views import View
 from keras.layers import LSTM, Dense
 from keras.models import Sequential
+
 from .models import HandGesture
 
 mp_holistic = mp.solutions.holistic  # Holistic model
 
 
 def mediapipe_detection(image, model):
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # COLOR CONVERSION BGR 2 RGB
-    image.flags.writeable = False  # Image is no longer writeable
-    results = model.process(image)  # Make prediction
-    image.flags.writeable = True  # Image is now writeable
-    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)  # COLOR COVERSION RGB 2 BGR
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image.flags.writeable = False
+    results = model.process(image)
+    image.flags.writeable = True
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
     return image, results
 
 
 def extract_keypoints(results):
     pose = np.array([[res.x, res.y, res.z, res.visibility] for res in
-                     results.pose_landmarks.landmark]).flatten() if results.pose_landmarks else np.zeros(33 * 4)
+                     results.pose_landmarks.landmark]).flatten() \
+        if results.pose_landmarks else np.zeros(33 * 4)
     face = np.array([[res.x, res.y, res.z] for res in
-                     results.face_landmarks.landmark]).flatten() if results.face_landmarks else np.zeros(468 * 3)
+                     results.face_landmarks.landmark]).flatten() \
+        if results.face_landmarks else np.zeros(468 * 3)
     lh = np.array([[res.x, res.y, res.z] for res in
-                   results.left_hand_landmarks.landmark]).flatten() if results.left_hand_landmarks else np.zeros(21 * 3)
+                   results.left_hand_landmarks.landmark]).flatten() \
+        if results.left_hand_landmarks else np.zeros(21 * 3)
     rh = np.array([[res.x, res.y, res.z] for res in
-                   results.right_hand_landmarks.landmark]).flatten() if results.right_hand_landmarks else np.zeros(
-        21 * 3)
+                   results.right_hand_landmarks.landmark]).flatten() \
+        if results.right_hand_landmarks else np.zeros(21 * 3)
+
     return np.concatenate([pose, face, lh, rh])
-
-
-# actions = np.array(['hello', 'thanks', 'iloveyou'])
 
 
 def get_model(actions):
@@ -48,12 +50,13 @@ def get_model(actions):
 
 
 def get_recognition(frame):
-    actions = np.array(HandGesture.objects.filter(is_trained=True).values_list("translationKey", flat=True))
     sequence = []
     sentence = []
     predictions = []
     threshold = 0.5
+    actions = np.array(HandGesture.objects.filter(is_trained=True).values_list("translation_key", flat=True))
     model = get_model(actions)
+
     with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
         # 1. Make detections
         image, results = mediapipe_detection(frame, holistic)
@@ -86,4 +89,3 @@ def get_recognition(frame):
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
         return sentence[-1]
-
