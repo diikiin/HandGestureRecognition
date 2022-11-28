@@ -24,6 +24,8 @@ SECRET_KEY = "django-insecure-zcrzkh)2*=yk$ij723oxkcq)v$+t!!-^)lf*wn9z6=@ir3216=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+# CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOW_CREDENTIALS = True
 ALLOWED_HOSTS = []
 
 # Application definition
@@ -37,7 +39,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "hand_gesture.apps.HandGestureConfig",
     "rest_framework",
-    "corsheaders"
+    "corsheaders",
+    'authenticaiton'
 ]
 
 MIDDLEWARE = [
@@ -53,7 +56,9 @@ MIDDLEWARE = [
 
 CORS_ORIGIN_WHITELIST = [
     "http://localhost:8080",
-    "http://localhost:3000"
+    "http://localhost:3000",
+    "http://localhost:8080",
+    "http://172.16.129.92:3000"
 ]
 
 ROOT_URLCONF = "HandGestureRecognition.urls"
@@ -131,3 +136,5 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
     'PAGE_SIZE': 2
 }
+
+AUTH_USER_MODEL = 'authenticaiton.User'
