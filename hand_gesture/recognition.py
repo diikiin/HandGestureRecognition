@@ -8,6 +8,7 @@ from HandGestureRecognition.settings import BASE_DIR
 from .models import HandGesture
 
 mp_holistic = mp.solutions.holistic  # Holistic model
+actions = np.array(HandGesture.objects.filter(is_trained=True).values_list("translation_key", flat=True))
 
 
 def mediapipe_detection(image, model):
@@ -37,17 +38,16 @@ def extract_keypoints(results):
     return np.concatenate([pose, face, lh, rh])
 
 
-def get_model(actions):
+class Model:
     model = Sequential()
     model.add(LSTM(64, return_sequences=True, activation='relu', input_shape=(30, 1662)))
     model.add(LSTM(128, return_sequences=True, activation='relu'))
     model.add(LSTM(64, return_sequences=False, activation='relu'))
     model.add(Dense(64, activation='relu'))
     model.add(Dense(32, activation='relu'))
-    model.add(Dense(actions.shape[0], activation='softmax'))
+    model.add(Dense(actions.shape[0], activation='softmax', name='dense_2'))
     model.compile(optimizer='Adam', loss='categorical_crossentropy', metrics=['categorical_accuracy'])
     model.load_weights('./hand_gesture/action.h5')
-    return model
 
 
 def get_recognition_image(frame):
@@ -55,8 +55,7 @@ def get_recognition_image(frame):
     sentence = []
     predictions = []
     threshold = 0.5
-    actions = np.array(HandGesture.objects.filter(is_trained=True).values_list("translation_key", flat=True))
-    model = get_model(actions)
+    model = Model.model
 
     with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
         # 1. Make detections
@@ -97,8 +96,7 @@ def get_recognition_video(video):
     sentence = []
     predictions = []
     threshold = 0.5
-    actions = np.array(HandGesture.objects.filter(is_trained=True).values_list("translation_key", flat=True))
-    model = get_model(actions)
+    model = Model.model
     cap = cv2.VideoCapture(BASE_DIR.__str__() + video)
 
     with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
