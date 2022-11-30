@@ -8,7 +8,9 @@ from HandGestureRecognition.settings import BASE_DIR
 from .models import HandGesture
 
 mp_holistic = mp.solutions.holistic  # Holistic model
-actions = np.array(HandGesture.objects.filter(is_trained=True).values_list("translation_key", flat=True))
+mp_drawing = mp.solutions.drawing_utils  # Drawing utilities
+
+colors = [(245, 117, 16), (117, 245, 16), (16, 117, 245)]
 
 
 def mediapipe_detection(image, model):
@@ -38,16 +40,51 @@ def extract_keypoints(results):
     return np.concatenate([pose, face, lh, rh])
 
 
-class Model:
+def draw_styled_landmarks(image, results):
+    # Draw face connections
+    mp_drawing.draw_landmarks(image, results.face_landmarks, mp_holistic.FACEMESH_CONTOURS,
+                              mp_drawing.DrawingSpec(color=(80, 110, 10), thickness=1, circle_radius=1),
+                              mp_drawing.DrawingSpec(color=(80, 256, 121), thickness=1, circle_radius=1)
+                              )
+    # Draw pose connections
+    mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS,
+                              mp_drawing.DrawingSpec(color=(80, 22, 10), thickness=2, circle_radius=4),
+                              mp_drawing.DrawingSpec(color=(80, 44, 121), thickness=2, circle_radius=2)
+                              )
+    # Draw left hand connections
+    mp_drawing.draw_landmarks(image, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS,
+                              mp_drawing.DrawingSpec(color=(121, 22, 76), thickness=2, circle_radius=4),
+                              mp_drawing.DrawingSpec(color=(121, 44, 250), thickness=2, circle_radius=2)
+                              )
+    # Draw right hand connections
+    mp_drawing.draw_landmarks(image, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS,
+                              mp_drawing.DrawingSpec(color=(245, 117, 66), thickness=2, circle_radius=4),
+                              mp_drawing.DrawingSpec(color=(245, 66, 230), thickness=2, circle_radius=2)
+                              )
+
+
+def prob_viz(res, actions, input_frame, colors):
+    output_frame = input_frame.copy()
+    for num, prob in enumerate(res):
+        cv2.rectangle(output_frame, (0, 60 + num * 40), (int(prob * 100), 90 + num * 40), colors[num], -1)
+        cv2.putText(output_frame, actions[num], (0, 85 + num * 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2,
+                    cv2.LINE_AA)
+
+    return output_frame
+
+
+def get_model(actions):
     model = Sequential()
     model.add(LSTM(64, return_sequences=True, activation='relu', input_shape=(30, 1662)))
     model.add(LSTM(128, return_sequences=True, activation='relu'))
     model.add(LSTM(64, return_sequences=False, activation='relu'))
     model.add(Dense(64, activation='relu'))
     model.add(Dense(32, activation='relu'))
-    model.add(Dense(actions.shape[0], activation='softmax', name='dense_2'))
+    model.add(Dense(actions.shape[0], activation='softmax'))
     model.compile(optimizer='Adam', loss='categorical_crossentropy', metrics=['categorical_accuracy'])
     model.load_weights('./hand_gesture/action.h5')
+
+    return model
 
 
 def get_recognition_image(frame):
@@ -55,7 +92,10 @@ def get_recognition_image(frame):
     sentence = []
     predictions = []
     threshold = 0.5
-    model = Model.model
+    actions = np.array(
+        HandGesture.objects.filter(is_trained=True).order_by("pk").values_list("translation_key", flat=True))
+    print(actions)
+    model = get_model(actions)
 
     with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
         # 1. Make detections
@@ -84,10 +124,6 @@ def get_recognition_image(frame):
             if len(sentence) > 5:
                 sentence = sentence[-5:]
 
-        cv2.rectangle(image, (0, 0), (1920, 40), (245, 117, 16), -1)
-        cv2.putText(image, ' '.join(sentence), (3, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-
         return sentence[-1]
 
 
@@ -96,7 +132,10 @@ def get_recognition_video(video):
     sentence = []
     predictions = []
     threshold = 0.5
-    model = Model.model
+    actions = np.array(
+        HandGesture.objects.filter(is_trained=True).order_by("pk").values_list("translation_key", flat=True))
+    print(actions)
+    model = get_model(actions)
     cap = cv2.VideoCapture(BASE_DIR.__str__() + video)
 
     with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
